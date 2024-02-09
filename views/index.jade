@@ -3,13 +3,16 @@ extends layout
 block content
   h1= title
 
-  button#random-name Randomize Username
+  button#random-name(type="button") Randomize Username
   h3#username
 
-  form
-  input(placeholder='Score' type='number')
-  button Submit
+  form#form
+    input#input(placeholder='Score' type='number' readonly)
+    button#random-score(type="submit") Random Score
+  button#socket-connection-toggle(type="button") Disconnect
   h2 Leaderboard Rankings
   ul#leaderboard-main
 
+  script(src='/socket.io/socket.io.js')
+  script(src='javascripts/socket.js')
   script(src='javascripts/random.js')

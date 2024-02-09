@@ -8,6 +8,8 @@ var app = require("../app");
 var debug = require("debug")("highscoreleaderboard:server");
 var http = require("http");
 const { Server } = require("socket.io");
+var sqlite3 = require("sqlite3");
+var { open } = require("sqlite");
 
 /**
  * Get port from environment and store in Express.
@@ -19,20 +21,74 @@ app.set("port", port);
 /**
  * Create HTTP server.
  */
-
 var server = http.createServer(app);
+async function main() {
+  //open db file
+  const db = await open({
+    filename: "scores.db",
+    driver: sqlite3.Database,
+  });
+  //create db tables
+  await db.exec(`
+  CREATE TABLE IF NOT EXISTS scores(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_offset  TEXT_UNIQUE,
+    content INTEGER
+  )`);
 
-//Couple socket.io to express
-const io = new Server(server);
+  //Couple socket.io to express
+  const io = new Server(server);
+  io.on("connection", async (socket) => {
+    console.log("A user connected");
+    if (!socket.recovered) {
+      //connection state recovery
+      try {
+        //subject to gchange
+        await db.each(
+          `SELECT id, content FROM scores WHERE id > ?`,
+          [socket.handshake.auth.serverOffset || 0],
+          (_err, row) => {
+            socket.emit("score msg", row.content, row.id);
+          }
+        );
+      } catch (e) {
+        //handle error
+      }
+    }
 
-/**
- * Listen on provided port, on all network interfaces.
- */
+    socket.on("disconnect", () => console.log("User disconnected"));
 
-server.listen(port);
-server.on("error", onError);
-server.on("listening", onListening);
+    socket.on("score msg", async (msg, clientOffset, callback) => {
+      console.log("score: " + msg);
+      let result;
+      try {
+        //store score in db
+        result = await db.run(
+          `INSERT INTO scores (content, client_offset) VALUES (?, ?)`,
+          msg,
+          clientOffset
+        );
+      } catch (e) {
+        if (e.errno === 19) {
+          //no sql duplicaterows
+          callback();
+        }
+        return;
+      }
+      //include offset with score
+      io.emit("score msg", msg, result.lastID);
+      callback();
+    });
+  });
 
+  /**
+   * Listen on provided port, on all network interfaces.
+   */
+
+  server.listen(port);
+  server.on("error", onError);
+  server.on("listening", onListening);
+}
 /**
  * Normalize a port into a number, string, or false.
  */
@@ -88,3 +144,4 @@ function onListening() {
   var bind = typeof addr === "string" ? "pipe " + addr : "port " + addr.port;
   debug("Listening on " + bind);
 }
+main();
