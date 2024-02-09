@@ -2,4 +2,14 @@ extends layout
 
 block content
   h1= title
-  p Welcome to #{title}
+
+  button#random-name Randomize Username
+  h3#username
+
+  form
+  input(placeholder='Score' type='number')
+  button Submit
+  h2 Leaderboard Rankings
+  ul#leaderboard-main
+
+  script(src='javascripts/random.js')
