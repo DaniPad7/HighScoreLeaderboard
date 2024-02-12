@@ -18,11 +18,12 @@ async function main() {
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     console.log("clicked rng button");
+    let player = document.getElementById("username");
     //set a random score
     let randInt = Math.floor(Math.random() * 10000);
     //now we will send
-    const clientOffset = `${socket.id}-${counter++}`;
-    socket.emit("score msg", randInt, clientOffset);
+    if (player.innerText) socket.emit("score msg", player.innerText, randInt);
+    else throw Error("Unknown username error");
     input.value = randInt;
   });
   toggleBtn.addEventListener("click", (e) => {
@@ -36,11 +37,11 @@ async function main() {
     }
   });
   //subject to change, does not have to recover lost scores, onlu current state
-  socket.on("score msg", (msg, serverOffset) => {
-    const item = document.createElement("li");
-    item.textContent = msg;
-    leaderboardMain.appendChild(item);
-    socket.auth.serverOffset = serverOffset;
+  socket.on("score msg", (data) => {
+    console.log(data);
+    /*const item = document.createElement("li");
+    item.textContent = `User: ${player}, Score: ${msg}`;
+    leaderboardMain.appendChild(item);*/
   });
 }
 

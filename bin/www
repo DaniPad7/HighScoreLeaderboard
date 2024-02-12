@@ -30,43 +30,52 @@ async function main() {
   });
   //create db tables
   await db.exec(`
-  CREATE TABLE IF NOT EXISTS scores(
+  CREATE TABLE IF NOT EXISTS player_scores(
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    client_offset  TEXT_UNIQUE,
-    content INTEGER
-  )`);
+    score INTEGER,
+    player TEXT_UNIQUE
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS [SORTED_player_score] on player_scores ([score] ASC, [player] ASC);`);
 
   //Couple socket.io to express
   const io = new Server(server);
   io.on("connection", async (socket) => {
     console.log("A user connected");
+    //connection state recovery, not final
+    let data;
     if (!socket.recovered) {
-      //connection state recovery
       try {
-        //subject to gchange
-        await db.each(
-          `SELECT id, content FROM scores WHERE id > ?`,
-          [socket.handshake.auth.serverOffset || 0],
-          (_err, row) => {
-            socket.emit("score msg", row.content, row.id);
-          }
+        data = await db.get(
+          `SELECT id, score, player FROM player_scores ORDER BY score`
         );
       } catch (e) {
         //handle error
       }
+      //socket.emit(data); WIP
+      console.log("sending current pagination on connection recovery");
+    } else {
+      try {
+        data = await db.get(
+          `SELECT id, score, player FROM player_scores ORDER BY score`
+        );
+      } catch (e) {
+        //handle error
+      }
+      //socket.emit(data); WIP
+      console.log("sending current pagination on first connection or refresh?");
     }
 
     socket.on("disconnect", () => console.log("User disconnected"));
 
-    socket.on("score msg", async (msg, clientOffset, callback) => {
-      console.log("score: " + msg);
+    socket.on("score msg", async (player, msg, callback) => {
+      console.log(`Player: ${player}, Score: ${score}`);
       let result;
       try {
-        //store score in db
+        //store score in db ad on correct pagination update all on that page to reduce egress
         result = await db.run(
-          `INSERT INTO scores (content, client_offset) VALUES (?, ?)`,
-          msg,
-          clientOffset
+          `INSERT INTO player_scores (player, score) VALUES (?, ?)`,
+          player,
+          msg
         );
       } catch (e) {
         if (e.errno === 19) {
@@ -75,8 +84,11 @@ async function main() {
         }
         return;
       }
-      //include offset with score
-      io.emit("score msg", msg, result.lastID);
+      //include pagination
+      let data = await db.get(
+        `SELECT id, score, player FROM player_scores ORDER BY score`
+      );
+      io.emit("score msg", data);
       callback();
     });
   });

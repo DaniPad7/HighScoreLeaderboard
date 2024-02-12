@@ -25,10 +25,8 @@ async function main() {
   });
 
   if (!username.innerText) {
-    console.log("Here 1");
     let res = await fetchRequest(randomUserUrl, GET);
     let data = await res.json();
-    console.log("Here 2");
     username.innerText = data.name;
   }
 }
